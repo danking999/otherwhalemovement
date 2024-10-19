@@ -1,7 +1,14 @@
 from flask import Flask, request, jsonify
 import re
+import logging
+
 
 app = Flask(__name__)
+
+
+# Set up basic logging
+logging.basicConfig(level=logging.INFO)
+
 
 # Helper function to shorten addresses for social media
 def shorten_address(address):
