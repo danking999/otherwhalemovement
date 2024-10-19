@@ -33,22 +33,40 @@ def index():
 @app.route('/webhook', methods=['POST'])
 def handle_webhook():
     try:
-        # Log incoming request data for debugging
+        # Get the data from the webhook
         data = request.get_json()
-        app.logger.info(f"Incoming webhook data: {data}")
+
+        # Log the incoming request for troubleshooting
+        logging.info(f"Received webhook data: {data}")
+
+        # Check if it's a valid whale alert
+        if not data:
+            logging.error("No data received")
+            return jsonify({"status": "error", "message": "No data received"}), 400
         
-        # Check if it's a whale alert
-        if data and data.get('type') == 'whale':
-            formatted_messages = format_message(data)
-            return jsonify({
-                "status": "success",
-                "website_message": formatted_messages['website_message'],
-                "social_message": formatted_messages['social_message']
-            })
-        else:
+        if data.get('type') != 'whale':
+            logging.warning(f"Ignored non-whale alert: {data}")
             return jsonify({"status": "ignored", "reason": "Not a whale alert"}), 400
+
+        # Ensure all necessary fields are present in the payload
+        required_fields = ['currency', 'blockchain', 'target_value', 'value', 'from', 'to']
+        for field in required_fields:
+            if field not in data:
+                logging.error(f"Missing required field: {field}")
+                return jsonify({"status": "error", "message": f"Missing required field: {field}"}), 400
+
+        # Format the message for website and social media
+        formatted_messages = format_message(data)
+        
+        # Return the formatted messages for now (you can integrate with your site and socials later)
+        return jsonify({
+            "status": "success",
+            "website_message": formatted_messages['website_message'],
+            "social_message": formatted_messages['social_message']
+        })
     except Exception as e:
-        app.logger.error(f"Error processing webhook: {e}")
+        # Log any unexpected errors for debugging
+        logging.error(f"Error processing webhook: {str(e)}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
