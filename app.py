@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template_string
 import re
 import logging
 
@@ -6,6 +6,9 @@ app = Flask(__name__)
 
 # Set up basic logging
 logging.basicConfig(level=logging.INFO)
+
+# Store alerts in memory (just for this session)
+whale_alerts = []
 
 # Helper function to shorten addresses for social media
 def shorten_address(address):
@@ -24,14 +27,17 @@ def format_message(data):
         "social_message": social_message
     }
 
-# Root route to indicate the app is running
-@app.route('/', methods=['GET', 'POST'])
+# Root route to display alerts
+@app.route('/')
 def index():
-    if request.method == 'POST':
-        logging.warning('POST request made to root endpoint. This should be redirected to /webhook.')
-        return jsonify({"status": "error", "message": "POST request to the wrong endpoint. Use /webhook."}), 405
-    return "Whale Movement Alert app is running!"
+    if whale_alerts:
+        # HTML to display whale alerts
+        alerts_html = "<br>".join(whale_alerts)
+        return render_template_string(f"<h1>Whale Movement Alerts</h1><p>{alerts_html}</p>")
+    else:
+        return "No whale alerts yet."
 
+# Webhook route to receive alerts
 @app.route('/webhook', methods=['POST'])
 def handle_webhook():
     try:
@@ -41,7 +47,7 @@ def handle_webhook():
         # Log the incoming data for debugging
         logging.info(f"Received webhook data: {data}")
 
-        # If this is a confirmation or verification message, always return 200 OK
+        # If this is a confirmation or verification message, return 200 OK
         if data and 'Confirmation message' in data['message']:
             logging.info(f"Received verification message: {data}")
             return jsonify({"status": "success", "message": "Webhook verified"}), 200
@@ -49,6 +55,14 @@ def handle_webhook():
         # Check if it's a whale alert
         if data and data.get('type') == 'whale':
             formatted_messages = format_message(data)
+            
+            # Store the website message in memory (latest first)
+            whale_alerts.insert(0, formatted_messages['website_message'])
+            
+            # Trim the list if it gets too large (limit to last 10 alerts)
+            if len(whale_alerts) > 20:
+                whale_alerts.pop()
+
             return jsonify({
                 "status": "success",
                 "website_message": formatted_messages['website_message'],
