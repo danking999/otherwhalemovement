@@ -23,6 +23,13 @@ def format_message(data):
         "social_message": social_message
     }
 
+# Root route to indicate the app is running
+@app.route('/')
+def index():
+    return "Whale Movement Alert app is running!"
+
+
+# Webhook route to handle incoming webhook requests
 @app.route('/webhook', methods=['POST'])
 def handle_webhook():
     try:
