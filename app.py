@@ -33,15 +33,13 @@ def index():
 @app.route('/webhook', methods=['POST'])
 def handle_webhook():
     try:
-        # Get the data from the webhook
+        # Log incoming request data for debugging
         data = request.get_json()
-
+        app.logger.info(f"Incoming webhook data: {data}")
+        
         # Check if it's a whale alert
         if data and data.get('type') == 'whale':
-            # Format the message
             formatted_messages = format_message(data)
-            
-            # Return the formatted messages for now (you will integrate with your site and socials later)
             return jsonify({
                 "status": "success",
                 "website_message": formatted_messages['website_message'],
@@ -50,6 +48,7 @@ def handle_webhook():
         else:
             return jsonify({"status": "ignored", "reason": "Not a whale alert"}), 400
     except Exception as e:
+        app.logger.error(f"Error processing webhook: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
