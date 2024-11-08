@@ -40,12 +40,22 @@ def index():
 # Webhook route to receive alerts
 @app.route('/webhook', methods=['POST'])
 def handle_webhook():
-    # Print raw request data
-    print("Received webhook data:", request.data)
+    # Print content type of incoming request
+    print("Content-Type:", request.headers.get('Content-Type'))
     
-    # Get and print JSON data
-    data = request.get_json()
-    print("Parsed JSON data:", data)
+    try:
+        # Try to parse as JSON
+        data = request.get_json()
+        print("Data is JSON format:", data)
+    except:
+        # If not JSON, get raw data and convert to dict
+        data = request.data
+        print("Raw data format:", data)
+        # Convert to dictionary/JSON format if needed
+        try:
+            data = dict(data)
+        except:
+            data = {"raw_data": str(data)}
     
     return jsonify(data), 200
 
