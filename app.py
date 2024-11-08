@@ -1,13 +1,16 @@
 from flask import Flask, request, jsonify, render_template_string
 import re
 import logging
+import sys
+import json
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
 # Set up basic logging
 logging.basicConfig(level=logging.INFO)
 
-# Store alerts in memory (just for this session)
+# Store alerts with timestamps
 whale_alerts = []
 
 # Helper function to shorten addresses for social media
@@ -30,32 +33,40 @@ def format_message(data):
 # Root route to display alerts
 @app.route('/')
 def index():
-    if whale_alerts:
-        # HTML to display whale alerts
-        alerts_html = "<br>".join(whale_alerts)
-        return render_template_string(f"<h1>Whale Movement Alerts</h1><p>{alerts_html}</p>")
-    else:
-        return "No whale alerts yet."
+    # Get current time
+    current_time = datetime.utcnow()
+    
+    # Filter alerts less than 8 hours old and convert datetime to string
+    recent_alerts = []
+    for alert in whale_alerts:
+        # Convert stored datetime string back to datetime object for comparison
+        alert_time = datetime.strptime(alert['timestamp'], '%Y-%m-%d %H:%M:%S')
+        if current_time - alert_time <= timedelta(hours=8):
+            recent_alerts.append(alert)
+    
+    # Update whale_alerts list to remove old alerts
+    whale_alerts.clear()
+    whale_alerts.extend(recent_alerts)
+    
+    if not whale_alerts:
+        return jsonify({"message": "No whale alerts yet"})
+    
+    return jsonify(recent_alerts)
 
 # Webhook route to receive alerts
 @app.route('/webhook', methods=['POST'])
 def handle_webhook():
-    # Print content type of incoming request
-    print("Content-Type:", request.headers.get('Content-Type'))
-    
     try:
-        # Try to parse as JSON
         data = request.get_json()
-        print("Data is JSON format:", data)
     except:
-        # If not JSON, get raw data and convert to dict
-        data = request.data
-        print("Raw data format:", data)
-        # Convert to dictionary/JSON format if needed
         try:
-            data = dict(data)
+            data = json.loads(request.data)
         except:
-            data = {"raw_data": str(data)}
+            data = {"raw_data": str(request.data)}
+    
+    # Add timestamp as string
+    data['timestamp'] = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    whale_alerts.append(data)
     
     return jsonify(data), 200
 
