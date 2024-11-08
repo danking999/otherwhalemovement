@@ -33,25 +33,23 @@ def format_message(data):
 # Root route to display alerts
 @app.route('/')
 def index():
-    # Get current time
     current_time = datetime.utcnow()
     
-    # Filter alerts less than 8 hours old and convert datetime to string
+    # Keep all alerts less than 8 hours old, remove older ones
     recent_alerts = []
     for alert in whale_alerts:
-        # Convert stored datetime string back to datetime object for comparison
         alert_time = datetime.strptime(alert['timestamp'], '%Y-%m-%d %H:%M:%S')
         if current_time - alert_time <= timedelta(hours=8):
             recent_alerts.append(alert)
     
-    # Update whale_alerts list to remove old alerts
+    # Update whale_alerts to only keep alerts < 8 hours old
     whale_alerts.clear()
     whale_alerts.extend(recent_alerts)
     
     if not whale_alerts:
         return jsonify({"message": "No whale alerts yet"})
     
-    return jsonify(recent_alerts)
+    return jsonify(whale_alerts)
 
 # Webhook route to receive alerts
 @app.route('/webhook', methods=['POST'])
@@ -66,7 +64,18 @@ def handle_webhook():
     
     # Add timestamp as string
     data['timestamp'] = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-    whale_alerts.append(data)
+    
+    # This cleanup happens every time a new alert comes in
+    current_time = datetime.utcnow()
+    recent_alerts = []
+    for alert in whale_alerts:
+        alert_time = datetime.strptime(alert['timestamp'], '%Y-%m-%d %H:%M:%S')
+        if current_time - alert_time <= timedelta(hours=8):  # Only keeps alerts < 8 hours old
+            recent_alerts.append(alert)
+    
+    whale_alerts.clear()
+    whale_alerts.extend(recent_alerts)
+    whale_alerts.append(data)  # Add the new alert
     
     return jsonify(data), 200
 
