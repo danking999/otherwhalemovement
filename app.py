@@ -4,6 +4,7 @@ import logging
 import sys
 import json
 from datetime import datetime, timedelta
+from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__)
 
@@ -33,22 +34,8 @@ def format_message(data):
 # Root route to display alerts
 @app.route('/')
 def index():
-    current_time = datetime.utcnow()
-    
-    # Keep all alerts less than 8 hours old, remove older ones
-    recent_alerts = []
-    for alert in whale_alerts:
-        alert_time = datetime.strptime(alert['timestamp'], '%Y-%m-%d %H:%M:%S')
-        if current_time - alert_time <= timedelta(hours=8):
-            recent_alerts.append(alert)
-    
-    # Update whale_alerts to only keep alerts < 8 hours old
-    whale_alerts.clear()
-    whale_alerts.extend(recent_alerts)
-    
     if not whale_alerts:
         return jsonify({"message": "No whale alerts yet"})
-    
     return jsonify(whale_alerts)
 
 # Webhook route to receive alerts
@@ -62,22 +49,49 @@ def handle_webhook():
         except:
             data = {"raw_data": str(request.data)}
     
-    # Add timestamp as string
+    # Fix timestamp assignment
     data['timestamp'] = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
     
-    # This cleanup happens every time a new alert comes in
     current_time = datetime.utcnow()
     recent_alerts = []
+    
+    # First add existing alerts that are less than 8 hours old
     for alert in whale_alerts:
-        alert_time = datetime.strptime(alert['timestamp'], '%Y-%m-%d %H:%M:%S')
-        if current_time - alert_time <= timedelta(hours=8):  # Only keeps alerts < 8 hours old
+        try:
+            alert_time = datetime.strptime(alert['timestamp'], '%Y-%m-%d %H:%M:%S')
+            if current_time - alert_time <= timedelta(hours=8):
+                recent_alerts.append(alert)
+        except:
+            # Keep alerts with invalid timestamps to prevent data loss
+            recent_alerts.append(alert)
+    
+    # Add new alert and update list
+    recent_alerts.append(data)
+    whale_alerts.clear()
+    whale_alerts.extend(recent_alerts)
+    
+    return jsonify(data), 200
+
+# Add cleanup function
+def cleanup_old_alerts():
+    current_time = datetime.utcnow()
+    recent_alerts = []
+    
+    for alert in whale_alerts:
+        try:
+            alert_time = datetime.strptime(alert['timestamp'], '%Y-%m-%d %H:%M:%S')
+            if current_time - alert_time <= timedelta(hours=8):
+                recent_alerts.append(alert)
+        except:
             recent_alerts.append(alert)
     
     whale_alerts.clear()
     whale_alerts.extend(recent_alerts)
-    whale_alerts.append(data)  # Add the new alert
-    
-    return jsonify(data), 200
+
+# Set up scheduler to run cleanup every hour
+scheduler = BackgroundScheduler()
+scheduler.add_job(func=cleanup_old_alerts, trigger="interval", hours=1)
+scheduler.start()
 
 if __name__ == '__main__':
     app.run(debug=True)
